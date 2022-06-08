@@ -1,0 +1,42 @@
+---
+title: "Function3"
+author: "Atom"
+date: "4/1/2022"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+```{r}
+
+test_gene_set_relevancy <- function(rawTable, GeneSet, CVnames, Trait, conf.int=FALSE) {
+
+rawTable <- rawTable %>% tibble::as_tibble()
+GeneSet <- GeneSet %>% tibble::as_tibble() %>% pull(1)
+CVnames <- CVnames %>% tibble::as_tibble() %>% pull(1)
+
+glmFunction <- function(inputTable, y){
+  f <- base::paste0(y,"~ .")
+  stats::glm(formula = as.formula(f), data = inputTable, family = "binomial")
+}
+
+tidy_fun <- function(model, GS_Count, ...) {
+  broom::tidy(model, ...) %>%
+  dplyr::filter(term == GS_Count)
+}
+
+relevantTable <- rawTable %>% 
+  dplyr::select(all_of(GeneSet), all_of(CVnames), all_of(Trait)) %>%
+  tidyr::pivot_longer(cols = all_of(GeneSet), names_to = "category", values_to = "count") %>%
+  dplyr::group_by(category) %>%
+  tidylr::nest() %>%
+  dplyr::mutate(logistic_regression = map(data, ~glmFunction(., Trait))) 
+
+relevantTable <- relevantTable %>%
+  dplyr::transmute(category, beta = map(logistic_regression, ~tidy_fun(., "count", conf.int = conf.int))) %>%
+  tidyr::unnest(cols = c(beta))
+
+return (relevantTable)
+
+}
+
+
